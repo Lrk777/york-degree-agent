@@ -1,0 +1,72 @@
+# Free-text requirement "buckets" → machine-checkable filters.
+#
+# The calendar API gives most rules as course lists, but the ones students get
+# lost in (non-science, breadth, electives) are free text. Each entry below says
+# which free text it matches, which courses count, and where the rule comes from.
+# Every entry has a source URL and a verified date; anything not encoded here is
+# reported as "check with an advisor" rather than guessed.
+
+buckets:
+  - id: sc_non_science
+    name: Non-Science Requirement (Faculty of Science)
+    match: "two different areas of study"
+    program_faculties: [SC]
+    min_areas: 2
+    min_credits_per_area: 3
+    include:
+      # Unrestricted areas: every course in these subjects counts (subject to the exclusions)
+      subjects: [AP/ANTH, AP/CLST, AP/EN, AP/FR, AP/GWST, AP/HIST, AP/HUMA, AP/MODR,
+                 AP/PHIL, AP/POLS, AP/SOSC, AP/SOCI]
+      # Individually listed courses from other faculties
+      courses: [AP/ARB 2700, AP/CH 2200, AP/CLTR 1953, AP/ECON 1000, AP/ECON 1010, AP/ECON 1900,
+                AP/ESL 1000, AP/ESL 1010, AP/ESL 1450, AP/FR 2200, AP/GEOG 1000, EU/GEOG 1000,
+                AP/GEOG 1410, AP/GEOG 2060, AP/HND 2700, AP/IT 2751, AP/JP 2700, AP/LING 1000,
+                AP/LING 2400, AP/LING 2410, AP/LING 2430, AP/LING 2450, AP/MODR 1730,
+                AP/MODR 1760, AP/MODR 1770, ES/ENVS 1000, ES/ENVS 2100, ES/ENVS 2150,
+                EU/ENVS 1010, EU/ENVS 1011, EU/ENVS 2100, FA/DANC 1340, FA/DANC 2340,
+                FA/FILM 1401, FA/CMA 1401, FA/FILM 1701, FA/CMA 1701, FA/FILM 2401, FA/CMA 2401,
+                FA/MUSI 1500, FA/MUSI 1510, FA/MUSI 1520, FA/MUSI 1530, FA/MUSI 1550,
+                FA/MUSI 2520, FA/ARTH 2110, FA/ARTH 2620, FA/THEA 1500]
+    exclude:
+      crosslisted_with_faculties: [SC]      # cross-listed as SC / eligible for SC credit
+      exclusion_with_faculties: [SC]        # has an SC course as a course credit exclusion
+      courses: [AP/MODR 1650, AP/ECON 1530] # math/stats-technique examples named by Lassonde advising
+      pass_fail: true
+    notes:
+      - "Courses whose main focus is language proficiency do not count."
+      - "Geography courses cannot be used by Geography majors."
+      - "Science Academic Services can approve other courses by petition."
+    sources:
+      - https://www.yorku.ca/science/my-degree/program-requirements/choosing-non-science-general-education-courses/
+      - https://lassonde.yorku.ca/wp-content/uploads/BSc-Non-Science-Requirement-1.pdf
+    verified: 2026-11-25
+    confidence: current-page   # rules page is not versioned by calendar year
+
+  - id: sc_science_breadth_outside_major
+    name: Science breadth outside the major
+    match: "science disciplines outside the major"
+    program_faculties: [SC]
+    include:
+      # "computer science, kinesiology and health science, psychology, biology, biochemistry,
+      #  biophysics, chemistry, environmental biology, earth and atmospheric science, geography,
+      #  physics and astronomy, science and technology studies" (2025-26 calendar text)
+      subjects: [LE/EECS, HH/KINE, HH/PSYC, SC/BIOL, SC/BCHM, SC/BPHS, SC/CHEM, SC/ENVB,
+                 LE/ESSE, SC/GEOG, SC/PHYS, SC/STS]
+    exclude:
+      major_subjects: true                  # subjects of the student's own major don't count
+    sources:
+      - https://calendars.students.yorku.ca/academic-calendar#/programs   # program text
+    verified: 2026-11-25
+    confidence: calendar-text
+
+  - id: additional_electives
+    name: Additional elective credits
+    match: "additional elective credits"
+    include:
+      any: true
+    exclude:
+      pass_fail: false
+    sources:
+      - https://calendars.students.yorku.ca/academic-calendar#/programs
+    verified: 2026-11-25
+    confidence: calendar-text
