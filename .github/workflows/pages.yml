@@ -1,0 +1,126 @@
+name: build-and-publish
+# Pulls York's public calendar (all programs, all courses, one catalog per year) and 2026-27 term
+# offerings, checks data quality, exports JSON and publishes the web app to GitHub Pages.
+# Polite: one request per second per job; responses cached between runs, so later runs only
+# re-fetch courses whose version changed.
+on:
+  push:
+    branches: [main]
+    paths: ["src/**", "rules/**", "web/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+    inputs:
+      years: {description: 'JSON list of calendar years', default: '["FW23/24","FW24/25","FW25/26","FW26/27"]'}
+      offerings: {description: "Scrape 2026-27 term offerings", type: boolean, default: true}
+      quick: {description: "Quick run: only subjects that programs mention", type: boolean, default: false}
+  schedule:
+    - cron: "17 7 * * 1"        # weekly, Monday 07:17 UTC
+permissions: {contents: read, pages: write, id-token: write}
+concurrency: {group: pages, cancel-in-progress: false}
+env: {PYTHONPATH: src}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+
+  sync:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    strategy:
+      fail-fast: false
+      matrix:
+        year: ${{ fromJSON(inputs.years || '["FW23/24","FW24/25","FW25/26","FW26/27"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r requirements.txt
+      - id: slug
+        run: echo "v=$(echo '${{ matrix.year }}' | tr 'A-Z/' 'a-z-')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        with: {path: data/raw/kuali, key: "kuali-${{ steps.slug.outputs.v }}-${{ github.run_id }}", restore-keys: "kuali-${{ steps.slug.outputs.v }}-"}
+      - name: Sync calendar
+        run: |
+          ARGS="--years ${{ matrix.year }} --programs all --db data/part-${{ steps.slug.outputs.v }}.db"
+          if [ "${{ inputs.quick }}" = "true" ]; then ARGS="$ARGS --referenced-only"; fi
+          python -m ydn.cli sync $ARGS | tee sync-${{ steps.slug.outputs.v }}.json
+      - if: always()
+        uses: actions/cache/save@v4
+        with: {path: data/raw/kuali, key: "kuali-${{ steps.slug.outputs.v }}-${{ github.run_id }}"}
+      - run: python -m ydn.cli dq --year "${{ matrix.year }}" --db data/part-${{ steps.slug.outputs.v }}.db | tee dq-${{ steps.slug.outputs.v }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: db-${{ steps.slug.outputs.v }}
+          path: |
+            data/part-${{ steps.slug.outputs.v }}.db
+            sync-${{ steps.slug.outputs.v }}.json
+            dq-${{ steps.slug.outputs.v }}.json
+
+  offerings:
+    needs: sync
+    if: ${{ inputs.offerings != false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    strategy:
+      fail-fast: false
+      matrix: {shard: [0, 1, 2]}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with: {name: db-fw26-27, path: data}
+      - uses: actions/cache/restore@v4
+        with: {path: data/raw/w2prod, key: "w2prod-${{ matrix.shard }}-${{ github.run_id }}", restore-keys: "w2prod-${{ matrix.shard }}-"}
+      - run: |
+          cp data/part-fw26-27.db data/offer-${{ matrix.shard }}.db
+          python -m ydn.cli offerings --year FW26/27 --ay 2026 --shard ${{ matrix.shard }} --shards 3 --db data/offer-${{ matrix.shard }}.db
+      - if: always()
+        uses: actions/cache/save@v4
+        with: {path: data/raw/w2prod, key: "w2prod-${{ matrix.shard }}-${{ github.run_id }}"}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offer-${{ matrix.shard }}
+          path: data/offer-${{ matrix.shard }}.db
+
+  build:
+    needs: [sync, offerings]
+    if: ${{ always() && needs.sync.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with: {path: parts, merge-multiple: true}
+      - name: Merge, export, assemble site
+        run: |
+          ls -la parts
+          python -m ydn.cli merge --into data/york.db parts/*.db
+          python -m ydn.cli export --db data/york.db --out site/data --ay 2026 | tee export.json
+          cp web/* site/
+          mkdir -p site/py/ydn
+          MODS="__init__ codes descparse tree catalog freetext transcript audit suggest report retrieval agent webapi"
+          for m in $MODS; do cp src/ydn/$m.py site/py/ydn/; done
+          python -c "import json,sys; print(json.dumps([m+'.py' for m in sys.argv[1:]]))" $MODS > site/py/manifest.json
+          cat parts/dq-*.json parts/sync-*.json > site/data/pipeline-report.txt || true
+          du -sh site site/data/*
+      - uses: actions/upload-pages-artifact@v3
+        with: {path: site}
+
+  deploy:
+    needs: build
+    if: ${{ always() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: {name: github-pages, url: "${{ steps.d.outputs.page_url }}"}
+    steps:
+      - id: d
+        uses: actions/deploy-pages@v4
