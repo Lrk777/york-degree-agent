@@ -127,7 +127,6 @@ def dq_report(con, year: str) -> dict:
     known_keys = {r[0] for r in q("SELECT course_key FROM courses WHERE year=?", year)}
     hard, soft = {}, {}
     hard["courses_loaded"] = len(known) > 0
-    hard["no_zero_credit_courses"] = q("SELECT COUNT(*) FROM courses WHERE year=? AND (credits IS NULL OR credits<=0)", year)[0][0] == 0
     hard["levels_valid"] = q("SELECT COUNT(*) FROM courses WHERE year=? AND level NOT IN (1000,2000,3000,4000,5000,6000)", year)[0][0] == 0
     # every course named by a program rule should exist in that year's catalog
     missing_rule_refs = set()
@@ -144,6 +143,9 @@ def dq_report(con, year: str) -> dict:
                 if full not in known and key not in known_keys:
                     dangling.add(full)
     soft["prereq_refs_not_in_loaded_subjects"] = len(dangling)
+    # Kuali lists some real courses with 0 or missing credits (e.g. practicums): reported, not fatal
+    soft["zero_or_missing_credit_courses"] = q(
+        "SELECT COUNT(*) FROM courses WHERE year=? AND (credits IS NULL OR credits<=0)", year)[0][0]
     soft["courses_with_unparsed_prereq_conditions"] = q(
         "SELECT COUNT(*) FROM courses WHERE year=? AND prereq_json LIKE '%\"conditions\": [\"%'", year)[0][0]
     return {"year": year, "hard": hard, "hard_ok": all(hard.values()), "soft": soft}
