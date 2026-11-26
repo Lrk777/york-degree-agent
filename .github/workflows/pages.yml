@@ -64,7 +64,7 @@ jobs:
 
   offerings:
     needs: sync
-    if: ${{ inputs.offerings != false }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.offerings }}
     runs-on: ubuntu-latest
     timeout-minutes: 345
     strategy:
@@ -76,7 +76,7 @@ jobs:
         with: {python-version: "3.12"}
       - run: pip install -r requirements.txt
       - uses: actions/download-artifact@v4
-        with: {name: db-fw26-27, path: data}
+        with: {name: db-fw26-27, path: .}
       - uses: actions/cache/restore@v4
         with: {path: data/raw/w2prod, key: "w2prod-${{ matrix.shard }}-${{ github.run_id }}", restore-keys: "w2prod-${{ matrix.shard }}-"}
       - run: |
@@ -103,15 +103,15 @@ jobs:
         with: {path: parts, merge-multiple: true}
       - name: Merge, export, assemble site
         run: |
-          ls -la parts
-          python -m ydn.cli merge --into data/york.db parts/*.db
+          find parts -type f | sort
+          python -m ydn.cli merge --into data/york.db $(find parts -name '*.db' | sort)
           python -m ydn.cli export --db data/york.db --out site/data --ay 2026 | tee export.json
           cp web/* site/
           mkdir -p site/py/ydn
           MODS="__init__ codes descparse tree catalog freetext transcript audit suggest report retrieval agent webapi"
           for m in $MODS; do cp src/ydn/$m.py site/py/ydn/; done
           python -c "import json,sys; print(json.dumps([m+'.py' for m in sys.argv[1:]]))" $MODS > site/py/manifest.json
-          cat parts/dq-*.json parts/sync-*.json > site/data/pipeline-report.txt || true
+          cat $(find parts -name 'dq-*.json' -o -name 'sync-*.json' | sort) > site/data/pipeline-report.txt || true
           du -sh site site/data/*
       - uses: actions/upload-pages-artifact@v3
         with: {path: site}
