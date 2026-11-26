@@ -1,0 +1,9 @@
+[project]
+name = "york-degree-agent"
+version = "0.1.0"
+description = "Unofficial York University degree-planning agent: calendar data pipeline, rules engine, and tool-using LLM assistant."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+testpaths = ["tests"]
