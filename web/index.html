@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Degree Navigator — unofficial York degree planner</title>
-<meta name="description" content="Unofficial degree-planning tool for York University students: see what's left, find electives that count, check any course.">
+<meta name="description" content="Unofficial degree checklist for York University students: pick your program, upload your courses, see what's done and what's left.">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="top">
   <div class="wrap">
     <div class="brand"><span class="mark">◆</span> Degree Navigator <span class="tag">unofficial</span></div>
-    <p class="sub">See what's left in your degree, find electives that actually count, and check any course — from York's public academic calendar.</p>
+    <p class="sub">Pick your program, add your courses, and see every requirement marked done or still needed, from York's public academic calendar.</p>
   </div>
 </header>
 
@@ -19,52 +19,76 @@
   <div class="notice">
     Not affiliated with York University. The Academic Calendar for the year you entered your program is the official source.
     Use this to prepare, then <strong>confirm with your Faculty's advising office</strong>.
-    Your transcript stays in this browser tab: nothing is uploaded or saved.
+    Your course list stays in this browser tab: nothing is uploaded or saved.
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="loadbar"><div class="loadfill" id="loadfill"></div></div>
+    <p class="status" id="loadstatus">Starting…</p>
   </div>
 
   <section class="card" id="step1">
-    <h2><span class="num">1</span> Your program</h2>
-    <div class="grid3">
-      <label>Calendar year you entered
+    <h2><span class="num">1</span> Your degree</h2>
+    <label class="search">Search for your program
+      <input id="progsearch" placeholder="e.g. data science, biology honours, psychology BA" autocomplete="off">
+    </label>
+    <div id="searchhits" class="hits"></div>
+    <div class="grid4">
+      <label>Year you started
         <select id="year"></select>
-        <small>Your rules come from the calendar of your entry year.</small>
+        <small>Your rules come from this year's calendar.</small>
       </label>
-      <label>Faculty
-        <select id="faculty"></select>
+      <label>Degree
+        <select id="degree"></select>
       </label>
       <label>Program
-        <select id="program"></select>
+        <select id="progname"></select>
+      </label>
+      <label>Type
+        <select id="progtype"></select>
       </label>
     </div>
-    <p class="status" id="loadstatus">Loading…</p>
+    <p class="chosen" id="chosen"></p>
   </section>
 
   <section class="card" id="step2">
     <h2><span class="num">2</span> Your courses</h2>
-    <p class="hint">Paste the course list from your unofficial transcript (one course per line, e.g.
-      <code>2024 FW SC MATH 2030 3.00 B</code>), or type courses yourself. Use <code>IP</code> for in progress.
-      Names and student numbers are removed before anything is read.</p>
-    <textarea id="transcript" rows="9" spellcheck="false" placeholder="2023 FW SC MATH 1013 3.00 A&#10;2023 FW LE EECS 1015 3.00 B+&#10;2025 FW SC MATH 3330 3.00 IP"></textarea>
+    <div class="drop" id="drop">
+      <input type="file" id="file" accept=".pdf,.txt,.csv,text/plain,text/csv,application/pdf" hidden>
+      <button id="pick" class="primary">Upload your course list</button>
+      <span class="hint">PDF, text or CSV, e.g. your unofficial transcript. Or drop the file here.</span>
+    </div>
+    <details class="paste" id="pastebox">
+      <summary>Or paste / type your courses</summary>
+      <p class="hint">One course per line, e.g. <code>2024 FW SC MATH 2030 3.00 B</code>. Use <code>IP</code> for courses in progress.
+        Names and student numbers are removed before anything is read.</p>
+      <textarea id="transcript" rows="8" spellcheck="false" placeholder="2023 FW SC MATH 1013 3.00 A&#10;2023 FW LE EECS 1015 3.00 B+&#10;2025 FW SC MATH 3330 3.00 IP"></textarea>
+    </details>
+    <div id="detected" class="detected hidden"></div>
     <div class="row">
-      <button id="run" class="primary" disabled>Check my progress</button>
+      <button id="run" class="primary big">Check my degree</button>
       <button id="sample" class="ghost">Try a sample student</button>
       <span class="status" id="readcount"></span>
     </div>
   </section>
 
-  <section class="card hidden" id="results">
-    <h2><span class="num">3</span> Where you stand</h2>
-    <div class="summary" id="summary"></div>
-    <div class="grid2 opts">
-      <label>Major subject(s) used for "in / outside the major" rules
-        <input id="major" placeholder="e.g. MATH">
-        <small>Guessed from your program. Change it if it's wrong, then re-check.</small>
-      </label>
-      <label id="streamwrap" class="hidden">Stream / option
-        <select id="stream"></select>
-      </label>
-    </div>
-    <div id="tree" class="tree"></div>
+  <section class="hidden" id="results">
+    <div class="card headline" id="headline"></div>
+    <div class="card todo" id="todo"></div>
+    <div id="sections"></div>
+    <div class="card" id="mycourses"></div>
+    <details class="card adjust">
+      <summary>Adjust the check</summary>
+      <div class="grid2">
+        <label>Major subject(s) used for "in / outside the major" rules
+          <input id="major" placeholder="e.g. MATH">
+          <small>Guessed from your program. Change it if it's wrong.</small>
+        </label>
+        <label id="streamwrap" class="hidden">Stream / option
+          <select id="stream"></select>
+        </label>
+      </div>
+    </details>
   </section>
 
   <section class="card hidden" id="finder">
@@ -87,7 +111,7 @@
 
   <section class="card hidden" id="chat">
     <h2>Ask a question <span class="tag">optional AI</span></h2>
-    <p class="hint">The assistant can only answer through the tools above (your audit, the course finder, the course check and a
+    <p class="hint">The assistant can only answer through the checks above (your checklist, the course finder, the course check and a
       search of your calendar year), so it can't invent requirements. It needs your own Anthropic API key, which is
       kept in this tab's memory only and sent only to Anthropic.</p>
     <div class="grid2">
@@ -112,12 +136,13 @@
     <h2>How it works</h2>
     <p>Program rules and courses come from York's public calendar data (one version per calendar year). A rules engine,
       not the AI, decides whether each requirement is met. Free-text rules (electives, "outside the major", breadth) are
-      read by an interpreter; anything it doesn't understand is marked <em>ask an advisor</em> instead of guessed.</p>
+      read by an interpreter; anything it doesn't understand is marked <em>ask an advisor</em> instead of guessed.
+      Which term a course runs in isn't shown: York's course timetable site blocks automated access, so check it before enrolling.</p>
     <p id="coverage"></p>
     <p><a href="https://github.com/Lrk777/york-degree-agent">Source code and method</a></p>
   </section>
 </main>
-<footer class="wrap foot">Built by a York student. Unofficial; may be wrong. Data: York University public Academic Calendar and Courses Website.</footer>
+<footer class="wrap foot">Built by a York student. Unofficial; may be wrong. Data: York University public Academic Calendar.</footer>
 <script src="https://cdn.jsdelivr.net/pyodide/v0.27.2/full/pyodide.js"></script>
 <script src="app.js"></script>
 </body>
