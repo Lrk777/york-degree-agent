@@ -96,7 +96,9 @@ class DegreeAgent:
             return {"requirement": r.node.label or r.node.rule_id,
                     "courses": [s.to_dict() for s in suggest_for(r, self.auditor, self.attempts, overlays,
                                                                   int(args.get("limit", 12)))],
-                    "note": "Course offerings by term are not checked yet; confirm the course runs in the term you want."}
+                    "note": ("2026-27 term offerings come from the York Courses Website; check the timetable before "
+                             "enrolling." if self.auditor.catalog.offerings else
+                             "Course offerings by term are not loaded; confirm the course runs in the term you want.")}
         if name == "does_it_count":
             code = parse_code(args.get("course", ""), known_subjects=self.auditor.catalog.subjects)
             if code is None:

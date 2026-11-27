@@ -96,3 +96,7 @@ def test_parse_schedule():
             "<td>Term W  Section N</td>")
     assert parse_schedule(html) == {"terms": ["F", "W"], "sections": 3}
     assert parse_schedule("") == {"terms": [], "sections": 0}
+    # real York markup (2026-11-27): non-breaking spaces between term and section
+    real = ('<td>Term F &nbsp;&nbsp;&nbsp;&nbsp;Section A</td><td>LECT01</td>'
+            '<td>Term W&nbsp;&nbsp;Section M</td>')
+    assert parse_schedule(real) == {"terms": ["F", "W"], "sections": 2}
