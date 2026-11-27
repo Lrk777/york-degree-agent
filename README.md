@@ -6,7 +6,7 @@ Pick your entry year and program, paste the course list from your unofficial tra
 
 - **where you stand**: every requirement marked done, in progress, still needed, or *ask an advisor*
 - **which courses count**: for each open requirement, real courses from any faculty or subject code, why
-  each one counts, whether you meet the prerequisites, whether it runs in 2026–27, and whether it also
+  each one counts, whether you meet the prerequisites, and whether it also
   helps another requirement (e.g. a 3000-level elective that also fills upper-level credits)
 - **does this course count?**: type any course and see every requirement it would or wouldn't fill
 - **a summary for your advisor**: what looks open and which rules need a human answer
@@ -61,6 +61,9 @@ Anthropic, using the student's own key. Tests use made-up students.
 - Prerequisites with non-course conditions ("24 credits completed", "permission of the instructor") are
   shown for a human check.
 - Transfer credits, petitions and residency rules aren't modelled.
+- Term offerings (which courses run in Fall/Winter 2026-27) aren't shown. York's Courses Website sits behind
+  bot protection, and the pipeline doesn't try to get around it, so the scraper is off by default and every
+  course shows "Offering not checked". Check the timetable before enrolling.
 
 ## Run locally
 
