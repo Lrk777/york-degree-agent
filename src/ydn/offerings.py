@@ -22,7 +22,10 @@ _SCHED_RE = re.compile(r'href="(/Apps/WebObjects/cdm\.woa/wo/[^"]+)"[^>]*>\s*[^<
 
 
 def parse_schedule(html: str) -> dict:
-    found = _TERM_RE.findall(re.sub(r"<[^>]+>", " ", html))
+    # The real pages write "Term F&nbsp;&nbsp;&nbsp;&nbsp;Section A": turn entities into spaces first
+    text = re.sub(r"<[^>]+>", " ", html or "")
+    text = re.sub(r"&nbsp;|&#160;|\xa0", " ", text)
+    found = _TERM_RE.findall(text)
     terms = sorted({t for t, _ in found})
     return {"terms": terms, "sections": len({(t, s) for t, s in found})}
 

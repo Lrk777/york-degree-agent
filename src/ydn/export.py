@@ -31,8 +31,20 @@ def export_year(con, year: str, out: Path, ay_offerings: str | None = None) -> d
     if ay_offerings:
         offer = {f: t.split(",") if t else [] for f, t in
                  con.execute("SELECT course_full, terms FROM offerings WHERE ay=?", (ay_offerings,)).fetchall()}
+        if offer and not any(offer.values()):
+            offer = {}          # nothing parsed at all = a scraper problem, not "nothing is offered": show as unknown
+    # Courses that exist only in a newer calendar (e.g. AP/PHIL 3500 is required by older Data Science calendars
+    # but listed only from FW26/27) are added from the newest year that has them, tagged with that year.
+    have = {r[0] for r in rows}
+    newer = {}
+    for r in con.execute("SELECT year, course_full, title, credits, description, prereq_raw, prereq_json, "
+                         "exclusions_json, crosslisted_json, gen_ed_flag, kuali_pid FROM courses WHERE year<>? "
+                         "ORDER BY year", (year,)).fetchall():
+        if r[1] not in have:
+            newer[r[1]] = r                     # later years overwrite earlier ones
+    rows = [(r, None) for r in rows] + [(r[1:], r[0]) for r in sorted(newer.values(), key=lambda r: r[1])]
     courses = []
-    for full, title, cr, desc, praw, pj, ej, xj, ge, pid in rows:
+    for (full, title, cr, desc, praw, pj, ej, xj, ge, pid), from_year in rows:
         pq = json.loads(pj or "{}")
         rec = {"c": f"{full} {cr or 0:.2f}", "t": title, "cr": cr, "d": (desc or "")[:700], "pid": pid}
         if pq.get("clauses"):
@@ -48,6 +60,9 @@ def export_year(con, year: str, out: Path, ay_offerings: str | None = None) -> d
                 rec[k] = v
         if ge:
             rec["ge"] = 1
+        if from_year:
+            rec["y"] = from_year
+            rec["t"] = f"{title} (listed in the {from_year} calendar)"
         courses.append(rec)
     subjects = dict(con.execute("SELECT subject, description FROM subjects WHERE year=?", (year,)).fetchall())
     (out / "courses.json").write_text(json.dumps({"year": year, "courses": courses, "subjects": subjects,
@@ -62,7 +77,8 @@ def export_year(con, year: str, out: Path, ay_offerings: str | None = None) -> d
     chunks = [{"text": t, "source": s, "section": sec, "url": u or ""} for s, sec, t, u in con.execute(
         "SELECT source, section, text, url FROM calendar_text WHERE year=?", (year,)).fetchall()]
     (out / "chunks.json").write_text(json.dumps(chunks, separators=(",", ":")))
-    return {"courses": len(courses), "programs": len(progs), "chunks": len(chunks), "offerings": len(offer)}
+    return {"courses": len(courses), "from_other_years": len(newer), "programs": len(progs), "chunks": len(chunks),
+            "offerings": sum(1 for v in offer.values() if v)}
 
 
 def coverage(con, year: str, buckets: BucketLibrary) -> dict:
@@ -110,7 +126,8 @@ def export_all(con, out: Path, rules_path: Path, ay_offerings: str | None = None
     years = [y for (y,) in con.execute("SELECT DISTINCT year FROM programs ORDER BY year").fetchall()]
     index = {"generated": time.strftime("%Y-%m-%d"), "years": [], "coverage": {}}
     for y in years:
-        stats = export_year(con, y, out / slug(y), ay_offerings if y == years[-1] else None)
+        # 2026-27 offerings apply to every entry year: students on older calendars take this year's courses too
+        stats = export_year(con, y, out / slug(y), ay_offerings)
         progs = json.loads((out / slug(y) / "programs.json").read_text())
         index["years"].append({"year": y, "slug": slug(y), **stats,
                                "programs": [{"pid": k, "code": v["code"], "title": v["title"], "faculty": v["faculty"]}
