@@ -136,7 +136,12 @@ function renderSummary(out) {
 function renderNode(n, depth) {
   if (n.status === "not_chosen" && depth > 1) return "";
   if (n.kind === "note") return "";
-  const label = n.label || ({ all_of: "Required courses", credits_from: "Choose from a list", bucket: "Credits", upper_level: "Upper-level credits", total: "Total credits" }[n.kind] || "Requirements");
+  if (n.kind === "group" && n.status === "info") return "";            // groups that only hold notes
+  if (n.kind === "credits_from" && /^0 of 0 credits/.test(n.message || "")) return "";   // optional lists with no credit target
+  const named = n.label && n.label !== n.kind;
+  // an unnamed group is just a wrapper in the calendar's markup: show its contents without an extra level
+  if (n.kind === "group" && !named && depth > 0) return n.children.map((c) => renderNode(c, depth)).join("");
+  const label = named ? n.label : ({ all_of: "Required courses", credits_from: "Choose from a list", bucket: "Credits from approved courses", upper_level: "Upper-level credits", total: "Total credits" }[n.kind] || "Requirements");
   const findable = ["missing", "manual", "in_progress"].includes(n.status) && ["bucket", "credits_from", "all_of"].includes(n.kind) && n.status !== "manual";
   const head = `<div class="head"><span class="badge ${n.status}">${STATUS[n.status] || n.status}</span>
     <div><span class="label">${esc(label)}</span>${n.need && n.status !== "met" ? ` <span class="msg">· ${n.need} credits to go</span>` : ""}
