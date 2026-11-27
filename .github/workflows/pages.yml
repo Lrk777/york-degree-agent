@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       years: {description: 'JSON list of calendar years', default: '["FW23/24","FW24/25","FW25/26","FW26/27"]'}
-      offerings: {description: "Scrape 2026-27 term offerings", type: boolean, default: true}
+      offerings: {description: "Try 2026-27 term offerings (York Courses Website is behind bot protection, so this normally finds nothing)", type: boolean, default: false}
       quick: {description: "Quick run: only subjects that programs mention", type: boolean, default: false}
   schedule:
     - cron: "17 7 * * 1"        # weekly, Monday 07:17 UTC
@@ -64,7 +64,7 @@ jobs:
 
   offerings:
     needs: sync
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.offerings }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.offerings }}
     runs-on: ubuntu-latest
     timeout-minutes: 345
     strategy:
